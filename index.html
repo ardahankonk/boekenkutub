@@ -3,41 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boeken Cloud Voorraad</title>
+    <title>Cloud Boekenvoorraad</title>
     <style>
-        /* Dezelfde mooie styling als voorheen */
-        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; justify-content: center; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; display: flex; justify-content: center; }
         .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 700px; }
-        .form-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        h1 { text-align: center; color: #1a1a1a; }
+        .form-group { display: flex; gap: 10px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; }
         input { padding: 10px; border: 1px solid #ddd; border-radius: 6px; flex: 1; }
-        button { cursor: pointer; border-radius: 6px; border: none; padding: 10px; background: #007bff; color: white; }
+        
+        .button-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        button { cursor: pointer; border-radius: 6px; border: none; font-weight: 600; transition: 0.2s; }
+        .add-btn { background: #007bff; color: white; padding: 10px 20px; }
+        .export-btn { background: #28a745; color: white; padding: 8px 15px; font-size: 0.85rem; }
+        .add-btn:hover { background: #0056b3; }
+        .export-btn:hover { background: #218838; }
+
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
-        .controls { display: flex; align-items: center; gap: 5px; }
-        .qty-input { width: 50px; text-align: center; }
+        .controls { display: flex; align-items: center; gap: 8px; }
+        .qty-input { width: 55px; text-align: center; padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        .btn-qty { width: 30px; height: 30px; background: #e9ecef; }
+        .btn-del { background: none; color: #dc3545; font-size: 0.8rem; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>☁️ Cloud Boekenvoorraad</h1>
+    <h1>📚 Mijn Boekenvoorraad</h1>
+    
     <div class="form-group">
-        <input type="text" id="bookTitle" placeholder="Titel">
+        <input type="text" id="bookTitle" placeholder="Titel van het boek">
         <input type="text" id="bookLang" placeholder="Taal">
-        <button onclick="addBook()">Toevoegen</button>
+        <button class="add-btn" onclick="addBook()">Toevoegen</button>
     </div>
+
+    <div class="button-row">
+        <span id="counter">Laden...</span>
+        <button class="export-btn" onclick="exportToExcel()">📊 Export naar Excel (CSV)</button>
+    </div>
+
     <table>
-        <thead><tr><th>Boek</th><th>Taal</th><th>Aantal</th><th></th></tr></thead>
+        <thead>
+            <tr>
+                <th>Boek</th>
+                <th>Taal</th>
+                <th>Voorraad</th>
+                <th></th>
+            </tr>
+        </thead>
         <tbody id="bookList"></tbody>
     </table>
 </div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } 
+  import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, getDocs } 
     from "https://www.gstatic.com/firebasejs/10.7.1/firebase-dev-firestore.js";
 
-  // --- PLAK HIER JOUW CONFIG DIE JE VAN FIREBASE KREEG ---
+  // --- PLAK HIER JOUW FIREBASE CONFIG ---
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 // TODO: Add SDKs for Firebase products that you want to use
@@ -55,13 +78,13 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-  // -----------------------------------------------------
+  // --------------------------------------
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const booksCol = collection(db, "books");
 
-  // Boeken toevoegen
+  // Toevoegen
   window.addBook = async () => {
     const title = document.getElementById('bookTitle').value;
     const lang = document.getElementById('bookLang').value;
@@ -72,11 +95,14 @@ const app = initializeApp(firebaseConfig);
     }
   };
 
-  // Real-time luisteren naar wijzigingen
+  // Live lijst bijwerken
   const q = query(booksCol, orderBy("createdAt", "desc"));
   onSnapshot(q, (snapshot) => {
     const list = document.getElementById('bookList');
+    const counter = document.getElementById('counter');
     list.innerHTML = '';
+    counter.innerText = `${snapshot.size} boeken gevonden`;
+
     snapshot.forEach((docSnap) => {
       const book = docSnap.data();
       const id = docSnap.id;
@@ -86,23 +112,43 @@ const app = initializeApp(firebaseConfig);
             <td>${book.lang}</td>
             <td>
                 <div class="controls">
-                    <button onclick="updateQty('${id}', ${book.quantity - 1})">-</button>
+                    <button class="btn-qty" onclick="updateQty('${id}', ${book.quantity - 1})">-</button>
                     <input type="number" class="qty-input" value="${book.quantity}" onchange="updateQty('${id}', this.value)">
-                    <button onclick="updateQty('${id}', ${book.quantity + 1})">+</button>
+                    <button class="btn-qty" onclick="updateQty('${id}', ${book.quantity + 1})">+</button>
                 </div>
             </td>
-            <td><button style="background:none; color:red;" onclick="deleteBook('${id}')">X</button></td>
+            <td><button class="btn-del" onclick="deleteBook('${id}')">Verwijder</button></td>
         </tr>`;
     });
   });
 
   window.updateQty = async (id, newQty) => {
     const bookRef = doc(db, "books", id);
-    await updateDoc(bookRef, { quantity: Math.max(0, parseInt(newQty)) });
+    await updateDoc(bookRef, { quantity: Math.max(0, parseInt(newQty) || 0) });
   };
 
   window.deleteBook = async (id) => {
-    if(confirm("Verwijderen?")) await deleteDoc(doc(db, "books", id));
+    if(confirm("Zeker weten?")) await deleteDoc(doc(db, "books", id));
+  };
+
+  // EXPORT FUNCTIE
+  window.exportToExcel = async () => {
+    const querySnapshot = await getDocs(booksCol);
+    let csvContent = "data:text/csv;charset=utf-8,Titel;Taal;Aantal\n";
+
+    querySnapshot.forEach((doc) => {
+        const b = doc.data();
+        // We gebruiken puntkomma (;) omdat de Nederlandse Excel dat fijn vindt
+        csvContent += `${b.title};${b.lang};${b.quantity}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "boekenvoorraad.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 </script>
 
