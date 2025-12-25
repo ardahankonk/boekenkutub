@@ -3,35 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Boekenvoorraad</title>
+    <title>Boeken Cloud</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 750px; }
-        h1 { text-align: center; color: #1a1a1a; margin-top: 0; }
         .form-group { display: flex; gap: 10px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; flex-wrap: wrap; }
-        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; flex: 1; min-width: 150px; }
+        input, select, button { padding: 10px; border-radius: 6px; border: 1px solid #ddd; }
+        button { cursor: pointer; background: #007bff; color: white; border: none; font-weight: 600; }
         
-        .button-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        button { cursor: pointer; border-radius: 6px; border: none; font-weight: 600; transition: 0.2s; }
-        .add-btn { background: #007bff; color: white; padding: 10px 20px; }
-        .export-btn { background: #28a745; color: white; padding: 8px 15px; font-size: 0.85rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; cursor: pointer; user-select: none; color: #555; }
+        th:hover { background-color: #f1f1f1; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
         
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
-        .controls { display: flex; align-items: center; gap: 8px; }
-        .qty-input { width: 55px; text-align: center; padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
-        .btn-qty { width: 30px; height: 30px; background: #e9ecef; }
-        .btn-del { background: none; color: #dc3545; font-size: 0.8rem; }
-
-        /* Foutopsporing venster */
-        #debug-box { width: 100%; max-width: 750px; background: #333; color: #00ff00; padding: 10px; border-radius: 8px; margin-top: 20px; font-family: monospace; font-size: 12px; display: none; }
+        .qty-controls { display: flex; align-items: center; gap: 8px; }
+        .qty-input { width: 50px; text-align: center; border: 1px solid #ccc; padding: 4px; }
+        .btn-qty { width: 28px; height: 28px; background: #e9ecef; color: black; padding: 0; }
+        #status-bar { font-size: 0.85rem; margin-bottom: 10px; color: #666; width: 100%; max-width: 750px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Boeken Kutuphana</h1>
+    <h1>📚 Boekenvoorraad</h1>
     
+    <div id="status-bar">Status: Verbinding maken...</div>
+
     <div class="form-group">
         <input type="text" id="bookTitle" placeholder="Titel van het boek">
         <select id="bookLang">
@@ -45,35 +42,32 @@
             <option value="Engels">Engels</option>
             <option value="Arabisch">Arabisch</option>
         </select>
-        <button class="add-btn" onclick="addBook()">Toevoegen</button>
+        <button onclick="addBook()">Toevoegen</button>
     </div>
 
-    <div class="button-row">
-        <span id="counter">Status: Bezig met verbinden...</span>
-        <button class="export-btn" onclick="exportToExcel()">📊 Excel Export</button>
+    <div style="text-align: right; margin-bottom: 10px;">
+        <button onclick="exportToExcel()" style="background:#28a745;">📊 Export naar Excel</button>
     </div>
 
     <table>
         <thead>
             <tr>
-                <th>Boek</th>
-                <th>Taal</th>
-                <th>Voorraad</th>
-                <th></th>
+                <th onclick="setSort('title')">Titel <span id="sort-title"></span></th>
+                <th onclick="setSort('lang')">Taal <span id="sort-lang"></span></th>
+                <th onclick="setSort('quantity')">Aantal <span id="sort-quantity"></span></th>
+                <th>Acties</th>
             </tr>
         </thead>
         <tbody id="bookList"></tbody>
     </table>
 </div>
 
-<div id="debug-box"></div>
-
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, getDocs } 
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } 
     from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  // --- PLAK HIER JOUW EIGEN CONFIG VAN FIREBASE ---
+  // --- JOUW CONFIG ---
   const firebaseConfig = {
 
   apiKey: "AIzaSyAz5kty9h1K7X0-VpTFsYyXyxdIBAzFnWQ",
@@ -89,107 +83,110 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
   appId: "1:996771778008:web:3dd890468196f4843176ad"
 
 };
-  // ------------------------------------------------
 
-  const debugBox = document.getElementById('debug-box');
-  const counter = document.getElementById('counter');
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const booksCol = collection(db, "books");
 
-  function logError(err) {
-    debugBox.style.display = 'block';
-    debugBox.innerText = "Foutmelding: " + err;
-    counter.innerText = "⚠️ Verbindingsfout";
+  let currentBooks = [];
+  let sortField = 'createdAt';
+  let sortDirection = 'desc';
+
+  // Sortering instellen
+  window.setSort = (field) => {
+    if (sortField === field) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortField = field;
+        sortDirection = 'asc';
+    }
+    updateTableIcons();
+    renderTable();
+  };
+
+  function updateTableIcons() {
+    ['title', 'lang', 'quantity'].forEach(f => {
+        document.getElementById('sort-' + f).innerText = '';
+    });
+    const icon = sortDirection === 'asc' ? ' ↑' : ' ↓';
+    if(document.getElementById('sort-' + sortField)) {
+        document.getElementById('sort-' + sortField).innerText = icon;
+    }
   }
 
-  try {
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const booksCol = collection(db, "books");
+  // Live luisteren naar Firebase
+  onSnapshot(query(booksCol), (snapshot) => {
+    currentBooks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    document.getElementById('status-bar').innerText = `✅ Verbonden: ${currentBooks.length} boeken`;
+    renderTable();
+  });
 
-    // Live lijst bijwerken
-    const q = query(booksCol, orderBy("createdAt", "desc"));
-    onSnapshot(q, (snapshot) => {
-        const list = document.getElementById('bookList');
-        list.innerHTML = '';
-        counter.innerText = `${snapshot.size} boeken gevonden`;
-        debugBox.style.display = 'none'; // Verberg debug als het werkt
+  function renderTable() {
+    const list = document.getElementById('bookList');
+    list.innerHTML = '';
 
-        snapshot.forEach((docSnap) => {
-            const book = docSnap.data();
-            const id = docSnap.id;
-            list.innerHTML += `
-                <tr>
-                    <td><strong>${book.title}</strong></td>
-                    <td>${book.lang}</td>
-                    <td>
-                        <div class="controls">
-                            <button class="btn-qty" onclick="updateQty('${id}', ${book.quantity - 1})">-</button>
-                            <input type="number" class="qty-input" value="${book.quantity}" onchange="updateQty('${id}', this.value)">
-                            <button class="btn-qty" onclick="updateQty('${id}', ${book.quantity + 1})">+</button>
-                        </div>
-                    </td>
-                    <td><button class="btn-del" onclick="deleteBook('${id}')">Verwijder</button></td>
-                </tr>`;
-        });
-    }, (error) => {
-        logError(error.message);
+    // Sorteren van de lokale kopie
+    const sorted = [...currentBooks].sort((a, b) => {
+        let valA = a[sortField];
+        let valB = b[sortField];
+        
+        // Zorg dat getallen als getallen vergeleken worden
+        if (sortField === 'quantity') {
+            return sortDirection === 'asc' ? valA - valB : valB - valA;
+        }
+        
+        // Tekst sorteren (Turks-vriendelijk)
+        return sortDirection === 'asc' 
+            ? String(valA).localeCompare(String(valB), 'tr') 
+            : String(valB).localeCompare(String(valA), 'tr');
     });
 
-    // Wereldwijde functies beschikbaar maken voor de knoppen
-    window.addBook = async () => {
-        const title = document.getElementById('bookTitle').value;
-        const lang = document.getElementById('bookLang').value;
-        if (title && lang) {
-            try {
-                await addDoc(booksCol, { title, lang, quantity: 0, createdAt: Date.now() });
-                document.getElementById('bookTitle').value = '';
-                document.getElementById('bookLang').selectedIndex = 0;
-            } catch (e) { logError(e.message); }
-        } else { alert("Titel en taal invullen!"); }
-    };
-
-    window.updateQty = async (id, newQty) => {
-        try {
-            const bookRef = doc(db, "books", id);
-            await updateDoc(bookRef, { quantity: Math.max(0, parseInt(newQty) || 0) });
-        } catch (e) { logError(e.message); }
-    };
-
-    window.deleteBook = async (id) => {
-        if(confirm("Zeker weten?")) {
-            try { await deleteDoc(doc(db, "books", id)); } catch (e) { logError(e.message); }
-        }
-    };
-
-    window.exportToExcel = async () => {
-    try {
-        const querySnapshot = await getDocs(booksCol);
-        
-        // De 'BOM' voor UTF-8 (onmisbaar voor Excel en Turkse tekens)
-        const BOM = "\uFEFF";
-        let csvContent = "Titel;Taal;Aantal\n";
-
-        querySnapshot.forEach((doc) => {
-            const b = doc.data();
-            csvContent += `${b.title};${b.lang};${b.quantity}\n`;
-        });
-
-        // Voeg de BOM samen met de content
-        const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", "boekenvoorraad.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    } catch (e) { logError(e.message); }
-};
-
-
-  } catch (e) {
-    logError("Configuratie fout: " + e.message);
+    sorted.forEach((book) => {
+      list.innerHTML += `
+        <tr>
+            <td><strong>${book.title}</strong></td>
+            <td>${book.lang}</td>
+            <td>
+                <div class="qty-controls">
+                    <button class="btn-qty" onclick="updateQty('${book.id}', ${book.quantity - 1})">-</button>
+                    <input type="number" class="qty-input" value="${book.quantity}" onchange="updateQty('${book.id}', this.value)">
+                    <button class="btn-qty" onclick="updateQty('${book.id}', ${book.quantity + 1})">+</button>
+                </div>
+            </td>
+            <td><button onclick="deleteBook('${book.id}')" style="background:#dc3545; padding:5px 10px; font-size:12px;">Verwijder</button></td>
+        </tr>`;
+    });
   }
+
+  window.addBook = async () => {
+    const title = document.getElementById('bookTitle').value;
+    const lang = document.getElementById('bookLang').value;
+    if (title && lang) {
+        await addDoc(booksCol, { title, lang, quantity: 0, createdAt: Date.now() });
+        document.getElementById('bookTitle').value = '';
+        document.getElementById('bookLang').selectedIndex = 0;
+    }
+  };
+
+  window.updateQty = async (id, val) => {
+    await updateDoc(doc(db, "books", id), { quantity: Math.max(0, parseInt(val) || 0) });
+  };
+
+  window.deleteBook = async (id) => {
+    if(confirm("Verwijderen?")) await deleteDoc(doc(db, "books", id));
+  };
+
+  // EXPORT MET BOM VOOR TURKSE TEKENS
+  window.exportToExcel = async () => {
+    const BOM = "\uFEFF";
+    let csv = "Titel;Taal;Aantal\n";
+    currentBooks.forEach(b => { csv += `${b.title};${b.lang};${b.quantity}\n`; });
+    const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "boekenvoorraad.csv";
+    link.click();
+  };
 </script>
 
 </body>
