@@ -3,151 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mijn Boekenvoorraad</title>
+    <title>Boeken Cloud Voorraad</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; padding: 20px; display: flex; justify-content: center; }
+        /* Dezelfde mooie styling als voorheen */
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; justify-content: center; }
         .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 700px; }
-        h1 { text-align: center; color: #1a1a1a; margin-bottom: 1.5rem; }
-        .form-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; }
-        input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; flex: 1; min-width: 140px; }
-        
-        .actions-top { display: flex; justify-content: space-between; margin-bottom: 10px; }
-        button { cursor: pointer; border-radius: 6px; font-weight: 600; transition: 0.2s; border: none; }
-        .add-btn { background-color: #007bff; color: white; padding: 10px 20px; }
-        .add-btn:hover { background-color: #0056b3; }
-        .download-btn { background-color: #6c757d; color: white; padding: 8px 15px; font-size: 0.85rem; }
-        .download-btn:hover { background-color: #5a6268; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 15px; border-bottom: 1px solid #eee; }
-        th { background-color: #ffffff; color: #666; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; }
-        
-        .controls { display: flex; align-items: center; gap: 8px; }
-        .qty-input { width: 60px; text-align: center; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
-        .btn-small { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #e9ecef; border: 1px solid #dee2e6; }
-        .btn-small:hover { background: #dee2e6; }
-        .btn-delete { color: #dc3545; background: none; font-size: 0.8rem; }
-        .btn-delete:hover { text-decoration: underline; }
-
-        @media (max-width: 500px) {
-            .form-group { flex-direction: column; }
-            th:nth-child(2), td:nth-child(2) { display: none; } /* Verberg taal op kleine schermen */
-        }
+        .form-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { padding: 10px; border: 1px solid #ddd; border-radius: 6px; flex: 1; }
+        button { cursor: pointer; border-radius: 6px; border: none; padding: 10px; background: #007bff; color: white; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        .controls { display: flex; align-items: center; gap: 5px; }
+        .qty-input { width: 50px; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>📚 Boekenvoorraad</h1>
-    
+    <h1>☁️ Cloud Boekenvoorraad</h1>
     <div class="form-group">
-        <input type="text" id="bookTitle" placeholder="Naam van het boek">
-        <input type="text" id="bookLang" placeholder="Taal (bijv. NL/EN)">
-        <button class="add-btn" onclick="addBook()">Toevoegen</button>
+        <input type="text" id="bookTitle" placeholder="Titel">
+        <input type="text" id="bookLang" placeholder="Taal">
+        <button onclick="addBook()">Toevoegen</button>
     </div>
-
-    <div class="actions-top">
-        <small id="countLabel">0 boeken in lijst</small>
-        <button class="download-btn" onclick="downloadData()">📥 Download Backup (JSON)</button>
-    </div>
-
     <table>
-        <thead>
-            <tr>
-                <th>Boek</th>
-                <th>Taal</th>
-                <th>Aantal</th>
-                <th></th>
-            </tr>
-        </thead>
+        <thead><tr><th>Boek</th><th>Taal</th><th>Aantal</th><th></th></tr></thead>
         <tbody id="bookList"></tbody>
     </table>
 </div>
 
-<script>
-    let books = JSON.parse(localStorage.getItem('myBooks')) || [];
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } 
+    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-dev-firestore.js";
 
-    function saveAndRender() {
-        localStorage.setItem('myBooks', JSON.stringify(books));
-        renderBooks();
+  // --- PLAK HIER JOUW CONFIG DIE JE VAN FIREBASE KREEG ---
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAz5kty9h1K7X0-VpTFsYyXyxdIBAzFnWQ",
+  authDomain: "boeken-kutub.firebaseapp.com",
+  projectId: "boeken-kutub",
+  storageBucket: "boeken-kutub.firebasestorage.app",
+  messagingSenderId: "996771778008",
+  appId: "1:996771778008:web:3dd890468196f4843176ad"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+  // -----------------------------------------------------
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const booksCol = collection(db, "books");
+
+  // Boeken toevoegen
+  window.addBook = async () => {
+    const title = document.getElementById('bookTitle').value;
+    const lang = document.getElementById('bookLang').value;
+    if (title && lang) {
+        await addDoc(booksCol, { title, lang, quantity: 0, createdAt: Date.now() });
+        document.getElementById('bookTitle').value = '';
+        document.getElementById('bookLang').value = '';
     }
+  };
 
-    function addBook() {
-        const titleInput = document.getElementById('bookTitle');
-        const langInput = document.getElementById('bookLang');
-        if (titleInput.value.trim() && langInput.value.trim()) {
-            books.push({ 
-                id: Date.now(), 
-                title: titleInput.value.trim(), 
-                lang: langInput.value.trim(), 
-                quantity: 0 
-            });
-            titleInput.value = '';
-            langInput.value = '';
-            saveAndRender();
-        }
-    }
+  // Real-time luisteren naar wijzigingen
+  const q = query(booksCol, orderBy("createdAt", "desc"));
+  onSnapshot(q, (snapshot) => {
+    const list = document.getElementById('bookList');
+    list.innerHTML = '';
+    snapshot.forEach((docSnap) => {
+      const book = docSnap.data();
+      const id = docSnap.id;
+      list.innerHTML += `
+        <tr>
+            <td><strong>${book.title}</strong></td>
+            <td>${book.lang}</td>
+            <td>
+                <div class="controls">
+                    <button onclick="updateQty('${id}', ${book.quantity - 1})">-</button>
+                    <input type="number" class="qty-input" value="${book.quantity}" onchange="updateQty('${id}', this.value)">
+                    <button onclick="updateQty('${id}', ${book.quantity + 1})">+</button>
+                </div>
+            </td>
+            <td><button style="background:none; color:red;" onclick="deleteBook('${id}')">X</button></td>
+        </tr>`;
+    });
+  });
 
-    function updateQty(id, amount) {
-        const book = books.find(b => b.id === id);
-        if (book) {
-            book.quantity = Math.max(0, book.quantity + amount);
-            saveAndRender();
-        }
-    }
+  window.updateQty = async (id, newQty) => {
+    const bookRef = doc(db, "books", id);
+    await updateDoc(bookRef, { quantity: Math.max(0, parseInt(newQty)) });
+  };
 
-    function manualQty(id, value) {
-        const book = books.find(b => b.id === id);
-        if (book) {
-            book.quantity = Math.max(0, parseInt(value) || 0);
-            saveAndRender();
-        }
-    }
-
-    function deleteBook(id) {
-        if(confirm("Weet je zeker dat je dit boek wilt verwijderen?")) {
-            books = books.filter(b => b.id !== id);
-            saveAndRender();
-        }
-    }
-
-    function downloadData() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(books, null, 2));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href",     dataStr);
-        downloadAnchorNode.setAttribute("download", "boeken_voorraad_backup.json");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-    }
-
-    function renderBooks() {
-        const list = document.getElementById('bookList');
-        const countLabel = document.getElementById('countLabel');
-        list.innerHTML = '';
-        countLabel.innerText = `${books.length} boeken in lijst`;
-
-        books.forEach(book => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><strong>${book.title}</strong></td>
-                <td>${book.lang}</td>
-                <td>
-                    <div class="controls">
-                        <button class="btn-small" onclick="updateQty(${book.id}, -1)">-</button>
-                        <input type="number" class="qty-input" value="${book.quantity}" onchange="manualQty(${book.id}, this.value)">
-                        <button class="btn-small" onclick="updateQty(${book.id}, 1)">+</button>
-                    </div>
-                </td>
-                <td>
-                    <button class="btn-delete" onclick="deleteBook(${book.id})">Verwijder</button>
-                </td>
-            `;
-            list.appendChild(row);
-        });
-    }
-
-    renderBooks();
+  window.deleteBook = async (id) => {
+    if(confirm("Verwijderen?")) await deleteDoc(doc(db, "books", id));
+  };
 </script>
 
 </body>
